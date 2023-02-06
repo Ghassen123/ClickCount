@@ -1,0 +1,222 @@
+include:
+  - local: gitlab-variables.yaml
+
+.to_build_mvn: &to_build_mvn
+  image:
+    name: maven:3.6.3-jdk-8
+    entrypoint: [""]
+### extract java app version from pom.xml file
+variables:
+  VARIABLES_FILE: variables.txt
+  POM_FILE: pom.xml
+
+.tag_version: &tag_version
+  image: ubuntu
+  script:
+    - echo $CI_REGISTRY_IMAGE_DOCKR
+    - apt-get update
+    - apt-get install -y libxml2-utils
+    - APP_VERSION=`xmllint --xpath '/*[local-name()="project"]/*[local-name()="version"]/text()' $POM_FILE`
+    - echo "export APP_VERSION=$APP_VERSION" > $VARIABLES_FILE
+### Build & puch to docker hub
+.docker_build_push: &docker_build_push
+  services:
+    - docker:dind
+  image: docker:latest
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  script:
+    - echo $CI_REGISTRY_IMAGE_DOCKR:${TAG}_${ENV}
+    - source $VARIABLES_FILE
+    - docker build --pull -t $CI_REGISTRY_IMAGE_DOCKR:${TAG}_${ENV} .
+    - docker push $CI_REGISTRY_IMAGE_DOCKR:${TAG}_${ENV}
+
+#////////////////////////////////////////
+#//         stage                     //
+#//////////////////////////////////////
+stages:
+  - preapare-application-version
+  - validate
+  - test
+  - integration-test
+  - build-mvn
+  - build-docker
+  - deploy
+########## stage: get-version
+preapare-application-version:get-version:
+  stage: preapare-application-version
+  extends:
+    - .DEV-ENV-VARS   
+  <<: *tag_version
+  artifacts:
+    paths:
+      - $VARIABLES_FILE
+  # rules: 
+  # - if : $GIT_CURRENT_BRANCH == "master"
+  #   when: "always"
+  # - if : $GIT_CURRENT_BRANCH =~ /^feature/
+  #   when: "always"
+
+########## stage: validate-mvn
+validate:validate-mvn:
+  stage: validate
+  image: maven:3.6.3-jdk-8
+  script:
+    - mvn clean
+  when: manual
+  only:
+    - develop
+    - merge_requests
+
+########## stage:test-mvn
+test:test-mvn:
+  stage: test
+  image: maven:3.6.3-jdk-8
+  script:
+    - mvn test-compile
+  only:
+    - develop
+    - merge_requests
+  when: manual
+
+
+########## stage: test-lint-mvn
+
+test:test-lint-mvn:
+  stage: test 
+  image: maven:3.6.3-jdk-8
+  script:
+    - mvn lint:check
+  only:
+    - develop
+    - merge_requests
+  when: manual
+
+########## stage: integration-test
+
+integration-test-mvn:
+  stage: integration-test
+  image: maven:3.6.3-jdk-8
+  script:
+    - mvn test
+  only:
+    - integration
+  when: manual
+
+########## stage: build-mvn-pkg
+
+build-mvn:build-mvn-pkg:
+  image: maven:3.6.3-jdk-8
+  stage: build-mvn
+  script: "mvn clean package"
+  artifacts:
+    name: ".WAR File" 
+    paths:
+      - target/
+    expire_in: "1 hour"
+  only:
+    - develop
+    - integration
+    - master
+    - tags
+
+  needs:
+    - preapare-application-version:get-version
+  when: manual
+
+
+########## stage: build-push-docker-dev
+
+build-docker:build-push-docker-dev:  
+  stage: build-docker 
+  extends:
+    - .DEV-ENV-VARS   
+  << : *docker_build_push
+  artifacts:
+    paths:
+      - target/
+  when: manual
+  only:
+    - develop
+  needs:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+  dependencies:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+
+
+########## stage: build-push-docker-int
+
+build-docker:build-push-docker-int:  
+  stage: build-docker 
+  extends:
+    - .INT-ENV-VARS   
+  << : *docker_build_push
+  artifacts:
+    paths:
+      - target/
+  only:
+    - integration
+  needs:
+    - build-mvn:build-mvn-pkg
+  when: manual
+  needs:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+  dependencies:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+########## stage: build-push-docker-ope
+
+build-docker:build-push-docker-ope:  
+  stage: build-docker 
+  extends:
+    - .PROD-ENV-VARS   
+  << : *docker_build_push
+  artifacts:
+    paths:
+      - target/
+  only:
+    - master
+    - tags
+  needs:
+    - build-mvn:build-mvn-pkg
+  when: manual
+  needs:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+  dependencies:
+    - build-mvn:build-mvn-pkg
+    - preapare-application-version:get-version
+########## stage: deploy
+
+deploy:
+  stage: deploy
+  trigger:
+    strategy: depend
+    include:
+      - .gitlab-cd.yml
+  # needs:
+  #    - build-docker:build-push-docker-dev
+  when: manual
+
+
+
+# deploy-int:
+#   stage: deploy-int
+#   trigger:
+#     strategy: depend
+#     include:
+#       - .gitlab-cd.yml
+#   when: manual
+
+
+
+# deploy-prod:
+#   stage: deploy-prod
+#   trigger:
+#     strategy: depend
+#     include:
+#       - .gitlab-cd.yml
+#   when: manual

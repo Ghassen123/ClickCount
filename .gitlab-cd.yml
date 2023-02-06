@@ -1,0 +1,145 @@
+stages:
+    - deploy-dev
+    - deploy-int
+    - deploy-prod
+include:
+  - local: gitlab-variables.yaml
+
+########## 
+
+.gke_deploy_script: &gke_deploy_script
+  image: ghassen123/click:sdk_helm
+  extends:
+    - .DEV-ENV-VARS
+  before_script:
+  #echo -n ${SA_DEV_GOOGLE_KEY} | base64 -d >
+  - echo ${SA_DEV_GOOGLE_KEY} > key.json
+  - gcloud auth activate-service-account --key-file key.json
+  - gcloud container clusters get-credentials ${GKE_DEV_CLUSTER_NAME} --zone ${GCP_DEV_ZONE}
+    --project ${GCP_DEV_PROJECT}
+
+########## stage: deploy-develop
+
+deploy-develop:
+  stage: deploy-dev
+  <<: *gke_deploy_script
+  extends:
+    - .DEV-ENV-VARS
+  script:
+  - kubectl get ns
+  - helm list
+  - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
+    --values helm/clickcount-webapp/values.yaml 
+    --set image.tag=${TAG}_${ENV}
+  - helm list
+  when: manual
+  only:
+    - develop
+
+########## stage:
+
+dev-rollback:
+  <<: *gke_deploy_script
+  stage: deploy-dev
+  script:
+    - helm rollback -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV} 0
+  when: manual
+  only:
+    - develop
+
+########## stage:
+
+dev-purge-clean:
+  stage: deploy-dev
+  <<: *gke_deploy_script
+  script:
+    -  helm uninstall -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV}
+  when: manual
+  only:
+    - develop
+
+
+###################################
+
+########## stage:
+
+deploy-integration:
+  stage: deploy-int
+  <<: *gke_deploy_script
+  extends:
+    - .INT-ENV-VARS
+  script:
+  - kubectl get ns
+  - helm list
+  - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
+    --values helm/clickcount-webapp/values.yaml 
+    --set image.tag=${TAG}_${ENV}
+  - helm list
+  when: manual
+  only:
+    - integration
+
+########## stage:
+
+int-rollback:
+  <<: *gke_deploy_script
+  stage: deploy-int
+  script:
+    - helm rollback -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV} 0
+  when: manual
+  only:
+    - integration
+########## stage:
+
+int-purge-clean:
+  stage: deploy-int
+  <<: *gke_deploy_script
+  script:
+    -  helm uninstall -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV}
+  when: manual
+  only:
+    - integration
+
+
+
+############################################
+########## stage:
+
+deploy-production:
+  stage: deploy-prod
+  <<: *gke_deploy_script
+  extends:
+    - .PROD-ENV-VARS
+  script:
+  - kubectl get ns
+  - helm list
+  - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
+    --values helm/clickcount-webapp/values.yaml 
+    --set image.tag=${TAG}_${ENV}
+  - helm list
+  when: manual
+  only:
+    - master
+    - tags
+########## stage:
+
+prod-rollback:
+  <<: *gke_deploy_script
+  stage: deploy-prod
+  script:
+    - helm rollback -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV} 0
+  when: manual
+  only:
+    - master
+    - tags
+########## stage:
+
+prod-purge-clean:
+  stage: deploy-prod
+  <<: *gke_deploy_script
+  script:
+    -  helm uninstall -n ${DEV_NAMESPACE} ${RELEASE_NAME}-${ENV}
+  when: manual
+  only:
+    - master
+    - tags

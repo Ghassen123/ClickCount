@@ -1,0 +1,30 @@
+.DEV-ENV-VARS:
+  variables:
+    GIT_CURRENT_BRANCH: $CI_COMMIT_BRANCH
+    ENV: dev
+    GCP_DEV_PROJECT: clickcount
+    GCP_DEV_ZONE : us-central1-a
+    GKE_DEV_CLUSTER_NAME: clickcount
+    DEV_NAMESPACE: default
+    RELEASE_NAME: myclickapp
+    TAG: $CI_COMMIT_SHA
+.INT-ENV-VARS:
+  variables:
+    GIT_CURRENT_BRANCH: $CI_COMMIT_BRANCH
+    ENV: int
+    GCP_DEV_PROJECT: clickcount
+    GCP_DEV_ZONE : us-central1-a
+    GKE_DEV_CLUSTER_NAME: clickcount
+    DEV_NAMESPACE: default
+    RELEASE_NAME: myclickapp
+    TAG: $CI_COMMIT_SHA
+.PROD-ENV-VARS:
+  variables:
+    GIT_CURRENT_BRANCH: $CI_COMMIT_BRANCH
+    ENV: prod
+    GCP_DEV_PROJECT: clickcount
+    GCP_DEV_ZONE : us-central1-a
+    GKE_DEV_CLUSTER_NAME: clickcount
+    DEV_NAMESPACE: default
+    RELEASE_NAME: myclickapp
+    TAG: $CI_COMMIT_SHA
