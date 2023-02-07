@@ -31,7 +31,7 @@ deploy-develop:
   - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
     --values helm/clickcount-webapp/values.yaml 
     --set image.tag=${TAG}_${ENV}
-  - helm list
+  - helm list  -n ${DEV_NAMESPACE}
   when: manual
   only:
     - develop
@@ -74,7 +74,7 @@ deploy-integration:
   - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
     --values helm/clickcount-webapp/values.yaml 
     --set image.tag=${TAG}_${ENV}
-  - helm list
+  - helm list  -n ${DEV_NAMESPACE}
   when: manual
   only:
     - integration
@@ -116,7 +116,7 @@ deploy-production:
   - helm upgrade --install --force ${RELEASE_NAME}-${ENV} helm/clickcount-webapp/ 
     --values helm/clickcount-webapp/values.yaml 
     --set image.tag=${TAG}_${ENV}
-  - helm list
+  - helm list  -n ${DEV_NAMESPACE}
   when: manual
   only:
     - master
